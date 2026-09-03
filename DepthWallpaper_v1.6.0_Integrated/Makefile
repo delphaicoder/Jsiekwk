@@ -9,6 +9,7 @@ APPLICATION_NAME = DepthWallpaperApp
 DepthWallpaperApp_FILES = DepthWallpaperApp/main.m DepthWallpaperApp/AppDelegate.m DepthWallpaperApp/SceneDelegate.m DepthWallpaperApp/ViewController.m DepthWallpaperApp/DWPresetManager.m DepthWallpaperApp/DWOptionsViewController.m
 DepthWallpaperApp_FRAMEWORKS = UIKit Foundation PhotosUI Photos
 DepthWallpaperApp_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
+DepthWallpaperApp_LDFLAGS = -lc++abi
 DepthWallpaperApp_INSTALL_PATH = /Applications
 DepthWallpaperApp_BUNDLE_NAME = DepthWallpaper
 DepthWallpaperApp_INFO_PLIST = DepthWallpaperApp/Resources/Info.plist
@@ -22,6 +23,7 @@ TWEAK_NAME = DepthWallpaperTweak
 DepthWallpaperTweak_FILES = Tweak.x DWWidget.x
 DepthWallpaperTweak_FRAMEWORKS = UIKit Foundation
 DepthWallpaperTweak_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -x objective-c
+DepthWallpaperTweak_LDFLAGS = -lc++abi
 
 
 include $(THEOS_MAKE_PATH)/tweak.mk
