@@ -1,0 +1,30 @@
+name: Build DepthWallpaper
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Theos
+        uses: theos/theos-action@v1
+
+      - name: Build rootless package
+        run: |
+          export THEOS="$HOME/theos"
+          export PATH="$THEOS/bin:$PATH"
+          make clean
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: DepthWallpaper-v1.6.0
+          path: packages/*.deb
+          if-no-files-found: error
