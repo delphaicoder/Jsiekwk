@@ -74,7 +74,7 @@ static NSInteger const DWMaxPresets = 20;
     meta[@"PresetName"] = name.length ? name : [NSString stringWithFormat:@"Preset %ld", (long)index];
     meta[@"SavedAt"] = @([[NSDate date] timeIntervalSince1970]);
     if (![meta writeToFile:[dir stringByAppendingPathComponent:@"meta.plist"] atomically:YES]) {
-        if (error) *error = [NSError errorWithDomain:@"DepthWallpaperPreset" code:3 userInfo:@{NSLocalizedDescriptionKey:@"Không lưu được metadata preset."]];
+        if (error) *error = [NSError errorWithDomain:@"DepthWallpaperPreset" code:3 userInfo:@{NSLocalizedDescriptionKey:@"Không lưu được metadata preset."}];
         return NO;
     }
     return YES;
@@ -85,7 +85,7 @@ static NSInteger const DWMaxPresets = 20;
     NSString *dir = [[self directory] stringByAppendingPathComponent:[NSString stringWithFormat:@"%02ld", (long)index]];
     NSFileManager *fm = NSFileManager.defaultManager;
     if (![fm fileExistsAtPath:dir]) {
-        if (error) *error = [NSError errorWithDomain:@"DepthWallpaperPreset" code:4 userInfo:@{NSLocalizedDescriptionKey:@"Preset không tồn tại."]];
+        if (error) *error = [NSError errorWithDomain:@"DepthWallpaperPreset" code:4 userInfo:@{NSLocalizedDescriptionKey:@"Preset không tồn tại."}];
         return NO;
     }
     NSString *wall = [dir stringByAppendingPathComponent:@"wallpaper.png"];
