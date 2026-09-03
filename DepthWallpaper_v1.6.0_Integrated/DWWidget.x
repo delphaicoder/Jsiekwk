@@ -77,10 +77,26 @@ static BOOL DWWidgetEnabled(NSDictionary *m) { return [m[DWMetaKeyWidgetEnabled]
 @end
 
 %hook SBDashBoardView
-- (void)didMoveToWindow { %orig; if (((UIView *)self).window) { [[DWWidgetManager shared] reload]; } }
-- (void)layoutSubviews { %orig; [[DWWidgetManager shared] attach]; }
+
+- (void)didMoveToWindow {
+    %orig;
+    if (((UIView *)self).window) {
+        [[DWWidgetManager shared] reload];
+    }
+}
+
+- (void)layoutSubviews {
+    %orig;
+    [[DWWidgetManager shared] attach];
+}
+
 %end
 
 %hook SpringBoard
-- (void)applicationDidFinishLaunching:(id)application { %orig; [[DWWidgetManager shared] reload]; }
+
+- (void)applicationDidFinishLaunching:(id)application {
+    %orig;
+    [[DWWidgetManager shared] reload];
+}
+
 %end
