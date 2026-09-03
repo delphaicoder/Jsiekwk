@@ -28,6 +28,14 @@ DepthWallpaperTweak_LDFLAGS = -lc++abi
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
+# Dam bao postinst/prerm luon co quyen thuc thi truoc khi dong goi — file nay hay
+# bi mat quyen thuc thi qua cac lan nen/giai nen/upload lai, gay loi dpkg-deb
+# "bad permissions" luc packaging. Chmod truc tiep tren thu muc staging (noi
+# Theos thuc su lay file de dong goi .deb) de dam bao luon dung du nguon co the
+# nao.
+before-package::
+	chmod 0755 "$(THEOS_STAGING_DIR)/DEBIAN/postinst" 2>/dev/null || true
+	chmod 0755 "$(THEOS_STAGING_DIR)/DEBIAN/prerm" 2>/dev/null || true
 
 # No automatic respring: install the package first, then respring manually if needed.
 # DepthWallpaper 1.5.6: attach from SBFLockScreenDateView and order between clock and notifications.
