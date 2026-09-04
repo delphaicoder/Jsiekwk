@@ -1,4 +1,5 @@
+# v1.6.4 build fix
 
-## v1.6.4 build fix
-- Fixed a malformed `0ok SpringBoard` terminator in `DWWidget.x`.
-- The file now ends the Logos hook with `0.000000e+00nd` instead of Objective-C `@end`.
+Fixed the final Logos hook terminator in `DWWidget.x`: the `SpringBoard` `%hook` must end with `%end`, not Objective-C `@end`.
+
+No changes were made to the existing DepthWallpaper cutout/depth engine.

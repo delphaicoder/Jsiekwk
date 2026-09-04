@@ -225,7 +225,7 @@ static void DWWidgetDarwinCallback(CFNotificationCenterRef center, void *observe
     return nil;
 }
 
-%end
+@end
 
 %hook SBFLockScreenDateView
 
