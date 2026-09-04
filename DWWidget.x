@@ -119,17 +119,17 @@ static void DWWidgetDarwinCallback(CFNotificationCenterRef center, void *observe
 
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
-    [[DWWidgetManager shared] attachToDashboard:self.view];
+    [[DWWidgetManager shared] attachToDashboard:[(UIViewController *)self view]];
     [[DWWidgetManager shared] reload];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [[DWWidgetManager shared] attachToDashboard:self.view];
+        [[DWWidgetManager shared] attachToDashboard:[(UIViewController *)self view]];
         [[DWWidgetManager shared] reload];
     });
 }
 
 - (void)viewDidLayoutSubviews {
     %orig;
-    [[DWWidgetManager shared] attachToDashboard:self.view];
+    [[DWWidgetManager shared] attachToDashboard:[(UIViewController *)self view]];
 }
 
 %end
