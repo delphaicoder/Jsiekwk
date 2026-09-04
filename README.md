@@ -105,3 +105,8 @@ See `FEATURES_v1.5.7.md` for the new preset system, options panel, logging expor
 ## v1.6.5 Widget additions
 
 The widget system now supports a single grouped widget container with three simultaneous slots. Each slot can be configured independently as Battery, Weather, or custom Text, and the Weather/Text slots can store their own content. The whole widget group has a numeric transparency setting from 0 to 100 percent. These changes are isolated from the existing cutout/depth engine.
+
+
+## v1.6.6 Widget update
+
+The Lock Screen widget group now contains three horizontal slots. Transparency controls only the widget background, while text and icons remain fully opaque. The widget layer is ordered above the clock and manual cutout when possible, while staying below notification branches. The existing cutout renderer is intentionally left unchanged.
