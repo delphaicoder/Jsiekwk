@@ -126,7 +126,7 @@ static NSString *DWWidgetSlotTextKey(NSInteger slot) {
         return c;
     }
 
-    if (ip.row == 0) return [self cellForBasic:tableView title:@"DepthWallpaper" detail:@"v1.6.10 • Manual Depth + Widgets" accessory:UITableViewCellAccessoryNone];
+    if (ip.row == 0) return [self cellForBasic:tableView title:@"DepthWallpaper" detail:@"v1.6.11 • Manual Depth + Widgets" accessory:UITableViewCellAccessoryNone];
     return [self cellForBasic:tableView title:@"Cutout engine" detail:@"Giữ nguyên engine ổn định v1.5.6" accessory:UITableViewCellAccessoryNone];
 }
 
@@ -205,29 +205,69 @@ static NSString *DWWidgetSlotTextKey(NSInteger slot) {
 }
 
 - (void)saveWidgetSlot:(NSInteger)slot type:(NSInteger)type text:(NSString *)providedText {
-    NSMutableDictionary *meta = [NSMutableDictionary dictionaryWithDictionary:[NSDictionary dictionaryWithContentsOfFile:DWMetadataPath] ?: @{}];
-    meta[DWWidgetSlotTypeKey(slot)] = @(type);
+    if (slot < 1 || slot > 3) return;
 
-    NSString *oldText = meta[DWWidgetSlotTextKey(slot)] ?: @"";
+    NSDictionary *current = [NSDictionary dictionaryWithContentsOfFile:DWMetadataPath] ?: @{};
+    NSString *typeKey = DWWidgetSlotTypeKey(slot);
+    NSString *textKey = DWWidgetSlotTextKey(slot);
+    NSString *oldText = [current[textKey] isKindOfClass:[NSString class]] ? current[textKey] : @"";
+
+    // Pin does not need custom text, so save it immediately.
     if (type == 0) {
-        meta[DWWidgetSlotTextKey(slot)] = @"";
-    } else if (providedText) {
-        meta[DWWidgetSlotTextKey(slot)] = providedText;
+        NSMutableDictionary *meta = [current mutableCopy];
+        meta[typeKey] = @(type);
+        meta[textKey] = @"";
+        if (![meta writeToFile:DWMetadataPath atomically:YES]) {
+            [self alert:@"Không lưu được cấu hình widget."];
+            return;
+        }
+        DWPostWidgetReload();
+        [self.tableView reloadData];
+        return;
     }
 
-    [meta writeToFile:DWMetadataPath atomically:YES];
-    DWPostWidgetReload();
-    [self.tableView reloadData];
-
-    if (type != 0 && !providedText) {
-        UIAlertController *a = [UIAlertController alertControllerWithTitle:type == 1 ? @"Weather" : @"Text" message:type == 1 ? @"Nhập nội dung thời tiết, ví dụ: ☀ 28°C" : @"Nhập nội dung muốn hiển thị" preferredStyle:UIAlertControllerStyleAlert];
-        [a addTextFieldWithConfigurationHandler:^(UITextField *f){ f.text = oldText; f.placeholder = type == 1 ? @"☀ 28°C" : @"Nội dung"; }];
+    // Weather/Text are saved atomically only after the user presses Lưu.
+    // This prevents the type from being saved while the custom text is still
+    // being edited, which used to make the displayed value appear to reset.
+    if (providedText == nil) {
+        NSString *title = (type == 1) ? @"Weather" : @"Text";
+        NSString *message = (type == 1)
+            ? @"Nhập nội dung muốn hiển thị, ví dụ: ☀ 28°C"
+            : @"Nhập nội dung muốn hiển thị";
+        UIAlertController *a = [UIAlertController alertControllerWithTitle:title
+                                                                     message:message
+                                                              preferredStyle:UIAlertControllerStyleAlert];
+        [a addTextFieldWithConfigurationHandler:^(UITextField *field) {
+            field.text = oldText;
+            field.placeholder = (type == 1) ? @"☀ 28°C" : @"Nội dung";
+            field.clearButtonMode = UITextFieldViewModeWhileEditing;
+        }];
         [a addAction:[UIAlertAction actionWithTitle:@"Hủy" style:UIAlertActionStyleCancel handler:nil]];
-        [a addAction:[UIAlertAction actionWithTitle:@"Lưu" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x){
-            [self saveWidgetSlot:slot type:type text:a.textFields.firstObject.text ?: @""];
+        [a addAction:[UIAlertAction actionWithTitle:@"Lưu" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            NSString *text = a.textFields.firstObject.text ?: @"";
+            NSMutableDictionary *meta = [NSMutableDictionary dictionaryWithDictionary:([NSDictionary dictionaryWithContentsOfFile:DWMetadataPath] ?: @{})];
+            meta[typeKey] = @(type);
+            meta[textKey] = text;
+            if (![meta writeToFile:DWMetadataPath atomically:YES]) {
+                [self alert:@"Không lưu được cấu hình widget."];
+                return;
+            }
+            DWPostWidgetReload();
+            [self.tableView reloadData];
         }]];
         [self presentViewController:a animated:YES completion:nil];
+        return;
     }
+
+    NSMutableDictionary *meta = [current mutableCopy];
+    meta[typeKey] = @(type);
+    meta[textKey] = providedText;
+    if (![meta writeToFile:DWMetadataPath atomically:YES]) {
+        [self alert:@"Không lưu được cấu hình widget."];
+        return;
+    }
+    DWPostWidgetReload();
+    [self.tableView reloadData];
 }
 
 - (void)widgetChanged {

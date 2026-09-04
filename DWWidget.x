@@ -283,7 +283,7 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
                 NSString *value = (level >= 0.0f)
                     ? [NSString stringWithFormat:@"Pin  %d%%", (int)roundf(level * 100.0f)]
                     : @"Pin  —";
-                icon.text = @"▣";
+                icon.text = @"🔋";
                 label.text = value;
             } else if (type == 1) {
                 icon.text = @"☂";
@@ -297,9 +297,12 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
         [self attach];
         self.view.hidden = !enabled;
 
-        DWWidgetLog([NSString stringWithFormat:@"reload enabled=%@ transparency=%0.0f%% superview=%@",
+        DWWidgetLog([NSString stringWithFormat:@"reload enabled=%@ transparency=%0.0f%% slot1=(%ld,%@) slot2=(%ld,%@) slot3=(%ld,%@) superview=%@",
                      enabled ? @"YES" : @"NO",
                      backgroundAlpha * 100.0,
+                     (long)DWWidgetTypeForSlot(m, 1), DWWidgetTextForSlot(m, 1),
+                     (long)DWWidgetTypeForSlot(m, 2), DWWidgetTextForSlot(m, 2),
+                     (long)DWWidgetTypeForSlot(m, 3), DWWidgetTextForSlot(m, 3),
                      self.view.superview ? NSStringFromClass(self.view.superview.class) : @"<nil>"]);
     });
 }
