@@ -24,6 +24,7 @@
 - (void)reload;
 - (void)attachToDashboard:(UIView *)dashboard;
 - (void)attachToClock:(UIView *)clock;
+- (void)scheduleLayerReorder;
 - (void)attach;
 @end
 
@@ -351,6 +352,9 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
                                         notification:(UIView *)notification {
     if (!parent || !self.view) return;
 
+    // Keep the widget in the same immediate stacking domain as the cutout.
+    // This is the most important rule: if the two views have different
+    // ancestors, inserting the widget "above" the cutout is not meaningful.
     UIView *clockBranch = DWWidgetDirectChild(clock, parent);
     UIView *cutoutBranch = DWWidgetDirectChild(cutoutHost, parent);
     UIView *notificationBranch = DWWidgetDirectChild(notification, parent);
@@ -359,8 +363,14 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
     if (cutoutBranch == self.view) cutoutBranch = nil;
     if (clockBranch == self.view) clockBranch = nil;
 
-    // Desired order: clock < cutout < widget < notification.
-    if (clockBranch && clockBranch != cutoutBranch) {
+    if (self.view.superview != parent) {
+        [self.view removeFromSuperview];
+        [parent addSubview:self.view];
+    }
+
+    // First place the widget above both clock and cutout. Then put it below
+    // the notification branch if that branch is available.
+    if (clockBranch && clockBranch != self.view) {
         [parent insertSubview:self.view aboveSubview:clockBranch];
     }
     if (cutoutBranch && cutoutBranch != self.view) {
@@ -370,8 +380,51 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
         [parent insertSubview:self.view belowSubview:notificationBranch];
     }
 
-    if (!clockBranch && !cutoutBranch && !notificationBranch) {
-        [parent addSubview:self.view];
+    DWWidgetLog([NSString stringWithFormat:@"reorder parent=%@ clockBranch=%@ cutoutBranch=%@ notificationBranch=%@ widgetIndex=%ld",
+                 NSStringFromClass(parent.class),
+                 clockBranch ? NSStringFromClass(clockBranch.class) : @"<none>",
+                 cutoutBranch ? NSStringFromClass(cutoutBranch.class) : @"<none>",
+                 notificationBranch ? NSStringFromClass(notificationBranch.class) : @"<none>",
+                 (long)[parent.subviews indexOfObject:self.view]]);
+}
+
+- (void)scheduleLayerReorder {
+    __weak typeof(self) weakSelf = self;
+    // The cutout tweak and the Lock Screen can rearrange their view hierarchy
+    // during wake/layout. Re-apply widget ordering a few times after the
+    // current layout pass without introducing a continuous render loop.
+    NSArray<NSNumber *> *delays = @[@0.0, @0.02, @0.06, @0.12, @0.25, @0.50, @0.90, @1.40];
+    for (NSNumber *delay in delays) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            if (!self || !self.view) return;
+            UIView *clock = self.clockView;
+            if (!clock || !clock.window) return;
+
+            UIView *dashboard = self.dashboard ?: DWWidgetDashboardRoot(clock);
+            UIView *cutoutHost = DWWidgetCutoutHost();
+            UIView *notification = dashboard ? DWWidgetFindView(dashboard, ^BOOL(UIView *candidate) {
+                return candidate != self.view && DWWidgetLooksLikeNotification(candidate);
+            }) : nil;
+
+            UIView *parent = nil;
+            // Strong preference: same superview as the already-working cutout.
+            if (cutoutHost && cutoutHost.superview && cutoutHost.window == clock.window) {
+                parent = cutoutHost.superview;
+            }
+            if (!parent) parent = DWWidgetChooseParent(clock, notification, cutoutHost, dashboard ?: clock);
+            if (!parent) return;
+
+            if (self.view.superview != parent) {
+                [self.view removeFromSuperview];
+                [parent addSubview:self.view];
+            }
+            [self reorderAboveCutoutAndClockBelowNotifications:parent
+                                                          clock:clock
+                                                      cutoutHost:cutoutHost
+                                                   notification:notification];
+        });
     }
 }
 
@@ -386,7 +439,13 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
         return candidate != self.view && DWWidgetLooksLikeNotification(candidate);
     });
 
-    UIView *parent = DWWidgetChooseParent(clock, notification, cutoutHost, dashboard);
+    UIView *parent = nil;
+    // Prefer the cutout host's immediate superview so the widget and cutout
+    // are guaranteed to participate in the same sibling z-order.
+    if (cutoutHost && cutoutHost.superview && cutoutHost.window == clock.window) {
+        parent = cutoutHost.superview;
+    }
+    if (!parent) parent = DWWidgetChooseParent(clock, notification, cutoutHost, dashboard);
     if (!parent) return;
     self.dashboard = dashboard;
 
@@ -413,6 +472,8 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
                  notification ? NSStringFromClass(notification.class) : @"<none>",
                  self.view.hidden ? @"NO" : @"YES",
                  NSStringFromCGRect(self.view.frame)]);
+
+    [self scheduleLayerReorder];
 }
 
 - (void)attachToDashboard:(UIView *)dashboard {
