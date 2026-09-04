@@ -72,7 +72,14 @@ static void DWWidgetLog(NSString *message) {
 }
 
 static void DWWidgetDarwinCallback(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
-    dispatch_async(dispatch_get_main_queue(), ^{ [[DWWidgetManager shared] reload]; });
+    dispatch_async(dispatch_get_main_queue(), ^{
+        DWWidgetLog(@"darwin reload requested");
+        [[DWWidgetManager shared] reload];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.12 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [[DWWidgetManager shared] reload];
+        });
+    });
 }
 
 static BOOL DWWidgetLooksLikeNotification(UIView *view) {
@@ -114,24 +121,12 @@ static UIView *DWWidgetDirectChild(UIView *descendant, UIView *root) {
     return v.superview == root ? v : nil;
 }
 
-static UIView *DWWidgetLowestCommonAncestor(UIView *a, UIView *b) {
-    if (!a || !b) return nil;
-    NSMutableSet *ancestors = [NSMutableSet set];
-    UIView *v = a;
-    while (v) { [ancestors addObject:v]; v = v.superview; }
-    v = b;
-    while (v) {
-        if ([ancestors containsObject:v]) return v;
-        v = v.superview;
-    }
-    return nil;
+static UIView *DWWidgetBranchUnderRoot(UIView *descendant, UIView *root) {
+    if (!descendant || !root || descendant == root) return nil;
+    return DWWidgetDirectChild(descendant, root);
 }
 
-static UIView *DWWidgetSafeAncestor(UIView *view) {
-    UIView *p = view;
-    while (p.superview && p.clipsToBounds) p = p.superview;
-    return p;
-}
+
 
 static UIView *DWWidgetCutoutHost(void) {
     // Access the already-working cutout manager at runtime without changing it.
@@ -152,33 +147,6 @@ static UIView *DWWidgetCutoutHost(void) {
     return nil;
 }
 
-static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView *cutoutHost, UIView *dashboard) {
-    UIView *parent = nil;
-
-    // Prefer the cutout host's immediate superview when it shares the same
-    // window. The depth layer already works there, so placing the widget in
-    // the same ordering domain lets us put the widget above the cutout.
-    if (cutoutHost && cutoutHost.superview &&
-        (!clock || cutoutHost.window == clock.window)) {
-        parent = cutoutHost.superview;
-    }
-
-    // Otherwise use a common ancestor containing clock and cutout.
-    if (!parent && clock && cutoutHost && clock.window == cutoutHost.window) {
-        parent = DWWidgetLowestCommonAncestor(clock, cutoutHost);
-    }
-
-    // Bring notification into the same ordering domain when possible.
-    if (parent && notification && clock && notification.window == clock.window) {
-        UIView *common = DWWidgetLowestCommonAncestor(parent, notification);
-        if (common) parent = common;
-    }
-
-    if (!parent && clock) parent = clock.superview;
-    if (!parent) parent = dashboard;
-
-    return DWWidgetSafeAncestor(parent);
-}
 
 @implementation DWWidgetManager
 
@@ -253,32 +221,32 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
 }
 
 - (void)reload {
-    dispatch_async(dispatch_get_main_queue(), ^{
+    void (^work)(void) = ^{
         [self buildView];
 
         NSDictionary *m = [NSDictionary dictionaryWithContentsOfFile:DWMetadataPath] ?: @{};
         BOOL enabled = DWWidgetEnabled(m);
         CGFloat backgroundAlpha = DWWidgetBackgroundAlpha(m);
 
-        // IMPORTANT: only the background is transparent. Text and icons remain opaque.
+        // Transparency affects only the card background. Text/icons stay fully opaque.
         self.view.alpha = 1.0;
         self.view.backgroundColor = [UIColor colorWithWhite:0.08 alpha:backgroundAlpha];
 
+        NSMutableArray *debugSlots = [NSMutableArray arrayWithCapacity:3];
         for (NSInteger i = 0; i < 3; i++) {
             NSInteger slot = i + 1;
             NSInteger type = DWWidgetTypeForSlot(m, slot);
-            NSString *text = DWWidgetTextForSlot(m, slot);
+            NSString *text = DWWidgetTextForSlot(m, slot) ?: @"";
             UILabel *icon = self.icons[i];
             UILabel *label = self.labels[i];
 
             if (type == 0) {
                 UIDevice.currentDevice.batteryMonitoringEnabled = YES;
                 float level = UIDevice.currentDevice.batteryLevel;
-                NSString *value = (level >= 0.0f)
+                icon.text = @"▣";
+                label.text = (level >= 0.0f)
                     ? [NSString stringWithFormat:@"Pin  %d%%", (int)roundf(level * 100.0f)]
                     : @"Pin  —";
-                icon.text = @"▣";
-                label.text = value;
             } else if (type == 1) {
                 icon.text = @"☂";
                 label.text = text.length ? text : @"Thời tiết";
@@ -286,16 +254,25 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
                 icon.text = @"✦";
                 label.text = text.length ? text : @"Depth Wallpaper";
             }
+
+            NSString *safeText = [label.text stringByReplacingOccurrencesOfString:@"\\n" withString:@" "];
+            [debugSlots addObject:[NSString stringWithFormat:@"%ld:type=%ld:text=%@", (long)slot, (long)type, safeText ?: @""]];
         }
 
+        // Re-attach only to the stable Lock Screen dashboard. Do not let the widget
+        // follow cutoutHost.superview; that caused the widget to jump in/out of the cutout.
         [self attach];
         self.view.hidden = !enabled;
 
-        DWWidgetLog([NSString stringWithFormat:@"reload enabled=%@ transparency=%0.0f%% superview=%@",
+        DWWidgetLog([NSString stringWithFormat:@"reload enabled=%@ transparency=%0.0f%% slots=[%@] parent=%@",
                      enabled ? @"YES" : @"NO",
                      backgroundAlpha * 100.0,
+                     [debugSlots componentsJoinedByString:@" | "],
                      self.view.superview ? NSStringFromClass(self.view.superview.class) : @"<nil>"]);
-    });
+    };
+
+    if ([NSThread isMainThread]) work();
+    else dispatch_async(dispatch_get_main_queue(), work);
 }
 
 - (void)batteryChanged:(NSNotification *)notification {
@@ -352,33 +329,24 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
                                         notification:(UIView *)notification {
     if (!parent || !self.view) return;
 
-    // Keep the widget in the same immediate stacking domain as the cutout.
-    // This is the most important rule: if the two views have different
-    // ancestors, inserting the widget "above" the cutout is not meaningful.
-    UIView *clockBranch = DWWidgetDirectChild(clock, parent);
-    UIView *cutoutBranch = DWWidgetDirectChild(cutoutHost, parent);
-    UIView *notificationBranch = DWWidgetDirectChild(notification, parent);
+    UIView *clockBranch = DWWidgetBranchUnderRoot(clock, parent);
+    UIView *cutoutBranch = DWWidgetBranchUnderRoot(cutoutHost, parent);
+    UIView *notificationBranch = DWWidgetBranchUnderRoot(notification, parent);
 
-    if (notificationBranch == self.view) notificationBranch = nil;
-    if (cutoutBranch == self.view) cutoutBranch = nil;
     if (clockBranch == self.view) clockBranch = nil;
+    if (cutoutBranch == self.view) cutoutBranch = nil;
+    if (notificationBranch == self.view) notificationBranch = nil;
 
+    // The widget always belongs to the dashboard. Never reparent it into the
+    // cutout host or another nested subtree.
     if (self.view.superview != parent) {
         [self.view removeFromSuperview];
         [parent addSubview:self.view];
     }
 
-    // First place the widget above both clock and cutout. Then put it below
-    // the notification branch if that branch is available.
-    if (clockBranch && clockBranch != self.view) {
-        [parent insertSubview:self.view aboveSubview:clockBranch];
-    }
-    if (cutoutBranch && cutoutBranch != self.view) {
-        [parent insertSubview:self.view aboveSubview:cutoutBranch];
-    }
-    if (notificationBranch && notificationBranch != self.view) {
-        [parent insertSubview:self.view belowSubview:notificationBranch];
-    }
+    if (clockBranch) [parent insertSubview:self.view aboveSubview:clockBranch];
+    if (cutoutBranch) [parent insertSubview:self.view aboveSubview:cutoutBranch];
+    if (notificationBranch) [parent insertSubview:self.view belowSubview:notificationBranch];
 
     DWWidgetLog([NSString stringWithFormat:@"reorder parent=%@ clockBranch=%@ cutoutBranch=%@ notificationBranch=%@ widgetIndex=%ld",
                  NSStringFromClass(parent.class),
@@ -390,37 +358,29 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
 
 - (void)scheduleLayerReorder {
     __weak typeof(self) weakSelf = self;
-    // The cutout tweak and the Lock Screen can rearrange their view hierarchy
-    // during wake/layout. Re-apply widget ordering a few times after the
-    // current layout pass without introducing a continuous render loop.
-    NSArray<NSNumber *> *delays = @[@0.0, @0.02, @0.06, @0.12, @0.25, @0.50, @0.90, @1.40];
+    NSArray<NSNumber *> *delays = @[@0.0, @0.03, @0.08, @0.15, @0.30, @0.60, @1.00];
     for (NSNumber *delay in delays) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             __strong typeof(weakSelf) self = weakSelf;
             if (!self || !self.view) return;
+
             UIView *clock = self.clockView;
             if (!clock || !clock.window) return;
 
-            UIView *dashboard = self.dashboard ?: DWWidgetDashboardRoot(clock);
+            UIView *dashboard = self.dashboard;
+            if (!dashboard || dashboard.window != clock.window) {
+                dashboard = DWWidgetDashboardRoot(clock);
+                self.dashboard = dashboard;
+            }
+            if (!dashboard) return;
+
             UIView *cutoutHost = DWWidgetCutoutHost();
-            UIView *notification = dashboard ? DWWidgetFindView(dashboard, ^BOOL(UIView *candidate) {
+            UIView *notification = DWWidgetFindView(dashboard, ^BOOL(UIView *candidate) {
                 return candidate != self.view && DWWidgetLooksLikeNotification(candidate);
-            }) : nil;
+            });
 
-            UIView *parent = nil;
-            // Strong preference: same superview as the already-working cutout.
-            if (cutoutHost && cutoutHost.superview && cutoutHost.window == clock.window) {
-                parent = cutoutHost.superview;
-            }
-            if (!parent) parent = DWWidgetChooseParent(clock, notification, cutoutHost, dashboard ?: clock);
-            if (!parent) return;
-
-            if (self.view.superview != parent) {
-                [self.view removeFromSuperview];
-                [parent addSubview:self.view];
-            }
-            [self reorderAboveCutoutAndClockBelowNotifications:parent
+            [self reorderAboveCutoutAndClockBelowNotifications:dashboard
                                                           clock:clock
                                                       cutoutHost:cutoutHost
                                                    notification:notification];
@@ -434,28 +394,23 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
     self.clockView = clock;
 
     UIView *dashboard = DWWidgetDashboardRoot(clock);
+    if (!dashboard || dashboard.window != clock.window) return;
+    self.dashboard = dashboard;
+
     UIView *cutoutHost = DWWidgetCutoutHost();
     UIView *notification = DWWidgetFindView(dashboard, ^BOOL(UIView *candidate) {
         return candidate != self.view && DWWidgetLooksLikeNotification(candidate);
     });
 
-    UIView *parent = nil;
-    // Prefer the cutout host's immediate superview so the widget and cutout
-    // are guaranteed to participate in the same sibling z-order.
-    if (cutoutHost && cutoutHost.superview && cutoutHost.window == clock.window) {
-        parent = cutoutHost.superview;
-    }
-    if (!parent) parent = DWWidgetChooseParent(clock, notification, cutoutHost, dashboard);
-    if (!parent) return;
-    self.dashboard = dashboard;
-
-    if (self.view.superview != parent) {
+    // Stable parent: the dashboard itself. This prevents the widget from
+    // jumping into/out of the cutout hierarchy as SpringBoard relayouts.
+    if (self.view.superview != dashboard) {
         [self.view removeFromSuperview];
-        [parent addSubview:self.view];
+        [dashboard addSubview:self.view];
     }
 
-    [self placeRelativeToClock:clock inParent:parent dashboard:dashboard];
-    [self reorderAboveCutoutAndClockBelowNotifications:parent
+    [self placeRelativeToClock:clock inParent:dashboard dashboard:dashboard];
+    [self reorderAboveCutoutAndClockBelowNotifications:dashboard
                                                   clock:clock
                                               cutoutHost:cutoutHost
                                            notification:notification];
@@ -465,8 +420,8 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
     self.view.alpha = 1.0;
     self.view.backgroundColor = [UIColor colorWithWhite:0.08 alpha:DWWidgetBackgroundAlpha(m)];
 
-    DWWidgetLog([NSString stringWithFormat:@"attach parent=%@ clock=%@ cutout=%@ notification=%@ visible=%@ frame=%@",
-                 NSStringFromClass(parent.class),
+    DWWidgetLog([NSString stringWithFormat:@"attach stableParent=%@ clock=%@ cutout=%@ notification=%@ visible=%@ frame=%@",
+                 NSStringFromClass(dashboard.class),
                  NSStringFromClass(clock.class),
                  cutoutHost ? NSStringFromClass(cutoutHost.class) : @"<none>",
                  notification ? NSStringFromClass(notification.class) : @"<none>",
@@ -508,12 +463,18 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
 }
 
 - (void)attach {
-    if (self.clockView.window) {
-        [self attachToClock:self.clockView];
+    // Keep the dashboard reference stable once found. This prevents the widget
+    // from moving between unrelated subtrees during Lock Screen transitions.
+    if (self.dashboard && self.dashboard.window) {
+        if (self.clockView.window) {
+            [self attachToClock:self.clockView];
+        } else {
+            [self attachToDashboard:self.dashboard];
+        }
         return;
     }
-    if (self.dashboard.window) {
-        [self attachToDashboard:self.dashboard];
+    if (self.clockView.window) {
+        [self attachToClock:self.clockView];
         return;
     }
 
