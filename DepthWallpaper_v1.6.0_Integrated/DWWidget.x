@@ -11,17 +11,31 @@
 @property(nonatomic,strong) UILabel *label;
 + (instancetype)shared;
 - (void)reload;
+- (void)attachToDashboard:(UIView *)dashboard;
 @end
 
 static BOOL DWWidgetEnabled(NSDictionary *m) { return [m[DWMetaKeyWidgetEnabled] boolValue]; }
 
+static void DWWidgetDarwinCallback(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
+    dispatch_async(dispatch_get_main_queue(), ^{ [[DWWidgetManager shared] reload]; });
+}
+
+
 @implementation DWWidgetManager
-+ (instancetype)shared { static DWWidgetManager *x; static dispatch_once_t once; dispatch_once(&once, ^{ x=[DWWidgetManager new]; }); return x; }
++ (instancetype)shared {
+    static DWWidgetManager *x; static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        x=[DWWidgetManager new];
+        CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, DWWidgetDarwinCallback, DWReloadNotification, NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+    });
+    return x;
+}
 
 - (void)reload {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSDictionary *m=[NSDictionary dictionaryWithContentsOfFile:DWMetadataPath] ?: @{};
         if (!self.view) [self buildView];
+        [self attach];
         self.view.hidden=!DWWidgetEnabled(m);
         NSInteger type=[m[DWMetaKeyWidgetType] integerValue];
         NSString *text=m[DWMetaKeyWidgetText] ?: @"";
@@ -53,21 +67,28 @@ static BOOL DWWidgetEnabled(NSDictionary *m) { return [m[DWMetaKeyWidgetEnabled]
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(batteryChanged:) name:UIDeviceBatteryLevelDidChangeNotification object:nil];
 }
 
-- (void)attach {
-    Class dash=NSClassFromString(@"SBDashBoardView");
-    if (!dash) return;
-    for (UIWindow *w in UIApplication.sharedApplication.windows) {
-        UIView *root=w.rootViewController.view;
-        UIView *found=[self find:root cls:dash];
-        if (found) { self.dashboard=found; break; }
-    }
-    if (!self.dashboard) return;
-    if (self.view.superview!=self.dashboard) [self.dashboard addSubview:self.view];
-    CGSize s=self.dashboard.bounds.size;
-    self.view.center=CGPointMake(s.width/2.0, MIN(300.0, MAX(190.0, s.height*0.27)));
-    self.view.autoresizingMask=UIViewAutoresizingFlexibleLeftMargin|UIViewAutoresizingFlexibleRightMargin;
+- (void)attachToDashboard:(UIView *)dashboard {
+    if (!dashboard) return;
+    self.dashboard = dashboard;
+    if (!self.view) [self buildView];
+    if (self.view.superview != dashboard) [dashboard addSubview:self.view];
+    CGSize s = dashboard.bounds.size;
+    if (s.width <= 0 || s.height <= 0) return;
+    self.view.center = CGPointMake(s.width / 2.0, MIN(300.0, MAX(190.0, s.height * 0.27)));
+    self.view.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
+    [dashboard bringSubviewToFront:self.view];
 }
 
+- (void)attach {
+    if (self.dashboard) { [self attachToDashboard:self.dashboard]; return; }
+    Class dash = NSClassFromString(@"SBDashBoardView");
+    if (!dash) return;
+    for (UIWindow *w in UIApplication.sharedApplication.windows) {
+        UIView *root = w.rootViewController.view;
+        UIView *found = [self find:root cls:dash];
+        if (found) { [self attachToDashboard:found]; return; }
+    }
+}
 - (UIView *)find:(UIView *)root cls:(Class)cls {
     if (!root) return nil; if ([root isKindOfClass:cls]) return root;
     for (UIView *v in [root.subviews copy]) { UIView *f=[self find:v cls:cls]; if(f)return f; }
@@ -82,12 +103,33 @@ static BOOL DWWidgetEnabled(NSDictionary *m) { return [m[DWMetaKeyWidgetEnabled]
     %orig;
     if (((UIView *)self).window) {
         [[DWWidgetManager shared] reload];
+        dispatch_async(dispatch_get_main_queue(), ^{ [[DWWidgetManager shared] attach]; });
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [[DWWidgetManager shared] reload]; });
     }
 }
 
 - (void)layoutSubviews {
     %orig;
     [[DWWidgetManager shared] attach];
+}
+
+%end
+
+%hook SBDashBoardViewController
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    [[DWWidgetManager shared] attachToDashboard:self.view];
+    [[DWWidgetManager shared] reload];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [[DWWidgetManager shared] attachToDashboard:self.view];
+        [[DWWidgetManager shared] reload];
+    });
+}
+
+- (void)viewDidLayoutSubviews {
+    %orig;
+    [[DWWidgetManager shared] attachToDashboard:self.view];
 }
 
 %end

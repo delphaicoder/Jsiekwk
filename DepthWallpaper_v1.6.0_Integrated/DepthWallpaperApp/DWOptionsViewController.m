@@ -87,10 +87,26 @@
         }
         if (!actions.count) { [self alert:@"Chưa có preset."]; return; }
         UIAlertController *a=[UIAlertController alertControllerWithTitle:(ip.row==1?@"Chọn preset":@"Xóa preset") message:nil preferredStyle:UIAlertControllerStyleActionSheet];
-        for (UIAlertAction *x in actions) [a addAction:x]; [a addAction:[UIAlertAction actionWithTitle:@"Hủy" style:UIAlertActionStyleCancel handler:nil]]; [self presentViewController:a animated:YES completion:nil];
+        for (UIAlertAction *x in actions) [a addAction:x];
+        [a addAction:[UIAlertAction actionWithTitle:@"Hủy" style:UIAlertActionStyleCancel handler:nil]];
+        // iPad requires a popover anchor for action sheets; without it UIKit can terminate the app.
+        UIPopoverPresentationController *popover = a.popoverPresentationController;
+        popover.sourceView = self.tableView;
+        popover.sourceRect = [self.tableView rectForRowAtIndexPath:ip];
+        popover.permittedArrowDirections = UIPopoverArrowDirectionAny;
+        [self presentViewController:a animated:YES completion:nil];
     } else if (ip.section == 1 && ip.row == 0) {
-        NSString *path=[[NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES) firstObject] stringByAppendingPathComponent:@"DepthWallpaperPicker.log.txt"];
-        UIActivityViewController *share=[[UIActivityViewController alloc] initWithActivityItems:@[[NSURL fileURLWithPath:path]] applicationActivities:nil]; share.popoverPresentationController.sourceView=self.view; [self presentViewController:share animated:YES completion:nil];
+        NSArray<NSURL *> *urls = [[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask];
+        NSString *path = urls.firstObject ? [urls.firstObject.path stringByAppendingPathComponent:@"DepthWallpaperPicker.log.txt"] : nil;
+        if (path && ![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+            NSString *fallback = @"DepthWallpaper diagnostic log\nLog file was missing when export was requested.\n";
+            [fallback writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        }
+        if (!path || ![[NSFileManager defaultManager] fileExistsAtPath:path]) { [self alert:@"Không tìm thấy file log."]; return; }
+        UIActivityViewController *share=[[UIActivityViewController alloc] initWithActivityItems:@[[NSURL fileURLWithPath:path]] applicationActivities:nil];
+        share.popoverPresentationController.sourceView=self.tableView;
+        share.popoverPresentationController.sourceRect=[self.tableView rectForRowAtIndexPath:ip];
+        [self presentViewController:share animated:YES completion:nil];
     }
 }
 
