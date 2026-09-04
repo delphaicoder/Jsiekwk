@@ -118,7 +118,7 @@ static NSString *DWWidgetSlotTextKey(NSInteger slot) {
         return c;
     }
 
-    if (ip.row == 0) return [self cellForBasic:tableView title:@"DepthWallpaper" detail:@"v1.6.6 • Manual Depth + Widgets" accessory:UITableViewCellAccessoryNone];
+    if (ip.row == 0) return [self cellForBasic:tableView title:@"DepthWallpaper" detail:@"v1.6.7 • Manual Depth + Widgets" accessory:UITableViewCellAccessoryNone];
     return [self cellForBasic:tableView title:@"Cutout engine" detail:@"Giữ nguyên engine ổn định v1.5.6" accessory:UITableViewCellAccessoryNone];
 }
 

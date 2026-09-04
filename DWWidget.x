@@ -154,13 +154,21 @@ static UIView *DWWidgetCutoutHost(void) {
 static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView *cutoutHost, UIView *dashboard) {
     UIView *parent = nil;
 
-    // Prefer a common ancestor containing the clock and existing depth cutout.
-    if (clock && cutoutHost && clock.window == cutoutHost.window) {
+    // Prefer the cutout host's immediate superview when it shares the same
+    // window. The depth layer already works there, so placing the widget in
+    // the same ordering domain lets us put the widget above the cutout.
+    if (cutoutHost && cutoutHost.superview &&
+        (!clock || cutoutHost.window == clock.window)) {
+        parent = cutoutHost.superview;
+    }
+
+    // Otherwise use a common ancestor containing clock and cutout.
+    if (!parent && clock && cutoutHost && clock.window == cutoutHost.window) {
         parent = DWWidgetLowestCommonAncestor(clock, cutoutHost);
     }
 
     // Bring notification into the same ordering domain when possible.
-    if (parent && notification && notification.window == clock.window) {
+    if (parent && notification && clock && notification.window == clock.window) {
         UIView *common = DWWidgetLowestCommonAncestor(parent, notification);
         if (common) parent = common;
     }
@@ -192,7 +200,7 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
     if (self.view) return;
 
     // One group containing three horizontal widget cells.
-    self.view = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 360, 108)];
+    self.view = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 300, 82)];
     self.view.backgroundColor = [UIColor colorWithWhite:0.08 alpha:0.86];
     self.view.layer.cornerRadius = 22.0;
     self.view.layer.masksToBounds = YES;
@@ -204,20 +212,20 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
     self.labels = [NSMutableArray arrayWithCapacity:3];
 
     for (NSInteger i = 0; i < 3; i++) {
-        CGFloat cellX = i * 120.0;
-        UIView *cell = [[UIView alloc] initWithFrame:CGRectMake(cellX, 0, 120, 108)];
+        CGFloat cellX = i * 100.0;
+        UIView *cell = [[UIView alloc] initWithFrame:CGRectMake(cellX, 0, 100, 82)];
         cell.backgroundColor = UIColor.clearColor;
         cell.userInteractionEnabled = NO;
         [self.view addSubview:cell];
 
-        UILabel *icon = [[UILabel alloc] initWithFrame:CGRectMake(6, 28, 34, 34)];
-        icon.font = [UIFont systemFontOfSize:21.0];
+        UILabel *icon = [[UILabel alloc] initWithFrame:CGRectMake(4, 20, 28, 28)];
+        icon.font = [UIFont systemFontOfSize:18.0];
         icon.textAlignment = NSTextAlignmentCenter;
         icon.textColor = UIColor.whiteColor;
         icon.backgroundColor = UIColor.clearColor;
 
-        UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(40, 24, 74, 48)];
-        label.font = [UIFont systemFontOfSize:15.5 weight:UIFontWeightSemibold];
+        UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(32, 17, 64, 48)];
+        label.font = [UIFont systemFontOfSize:13.5 weight:UIFontWeightSemibold];
         label.textAlignment = NSTextAlignmentCenter;
         label.adjustsFontSizeToFitWidth = YES;
         label.minimumScaleFactor = 0.60;
@@ -231,7 +239,7 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
         [self.labels addObject:label];
 
         if (i < 2) {
-            UIView *separator = [[UIView alloc] initWithFrame:CGRectMake(cellX + 119.0, 20, 1, 68)];
+            UIView *separator = [[UIView alloc] initWithFrame:CGRectMake(cellX + 99.0, 15, 1, 52)];
             separator.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.10];
             [self.view addSubview:separator];
         }
@@ -306,8 +314,8 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
 
     CGFloat xRatio = m[DWMetaKeyWidgetCenterX] ? [m[DWMetaKeyWidgetCenterX] doubleValue] : 0.5;
     CGFloat yRatio = m[DWMetaKeyWidgetCenterY] ? [m[DWMetaKeyWidgetCenterY] doubleValue] : -1.0;
-    CGFloat width = 360.0 * scale;
-    CGFloat height = 108.0 * scale;
+    CGFloat width = 300.0 * scale;
+    CGFloat height = 82.0 * scale;
 
     CGFloat x = CGRectGetMinX(dashboardRect) + dashboardRect.size.width * xRatio;
     CGFloat y = (yRatio >= 0.0)
@@ -325,15 +333,15 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
     self.view.bounds = (CGRect){ CGPointZero, CGSizeMake(width, height) };
     self.view.center = CGPointMake(x, y);
 
-    CGFloat cellWidth = 120.0 * scale;
+    CGFloat cellWidth = 100.0 * scale;
     for (NSInteger i = 0; i < self.icons.count; i++) {
         UILabel *icon = self.icons[i];
         UILabel *label = self.labels[i];
         CGFloat cellX = i * cellWidth;
-        icon.frame = CGRectMake(cellX + 6 * scale, 28 * scale, 34 * scale, 34 * scale);
-        label.frame = CGRectMake(cellX + 40 * scale, 24 * scale, 74 * scale, 48 * scale);
-        icon.font = [UIFont systemFontOfSize:21.0 * scale];
-        label.font = [UIFont systemFontOfSize:15.5 * scale weight:UIFontWeightSemibold];
+        icon.frame = CGRectMake(cellX + 4 * scale, 20 * scale, 28 * scale, 28 * scale);
+        label.frame = CGRectMake(cellX + 32 * scale, 17 * scale, 64 * scale, 48 * scale);
+        icon.font = [UIFont systemFontOfSize:18.0 * scale];
+        label.font = [UIFont systemFontOfSize:13.5 * scale weight:UIFontWeightSemibold];
     }
 }
 
@@ -427,8 +435,8 @@ static UIView *DWWidgetChooseParent(UIView *clock, UIView *notification, UIView 
     self.view.backgroundColor = [UIColor colorWithWhite:0.08 alpha:alpha];
     self.view.hidden = !DWWidgetEnabled(m);
 
-    CGFloat width = 360.0;
-    CGFloat height = 108.0;
+    CGFloat width = 300.0;
+    CGFloat height = 82.0;
     self.view.bounds = (CGRect){ CGPointZero, CGSizeMake(width, height) };
     self.view.center = CGPointMake(CGRectGetMidX(dashboard.bounds), CGRectGetMaxY(dashboard.bounds) * 0.62);
     if (self.view.superview != dashboard) {
