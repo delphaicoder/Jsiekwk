@@ -225,7 +225,7 @@ static void DWWidgetDarwinCallback(CFNotificationCenterRef center, void *observe
     return nil;
 }
 
-@end
+%end
 
 %hook SBFLockScreenDateView
 
@@ -288,4 +288,4 @@ static void DWWidgetDarwinCallback(CFNotificationCenterRef center, void *observe
     [[DWWidgetManager shared] reload];
 }
 
-@end
+%end
