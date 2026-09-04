@@ -8,6 +8,14 @@
 @property(nonatomic,strong) UILabel *presetCount;
 @end
 
+static void DWPostWidgetReload(void) {
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), DWReloadNotification, NULL, NULL, YES);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.18 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), DWReloadNotification, NULL, NULL, YES);
+    });
+}
+
 @implementation DWOptionsViewController
 
 - (void)viewDidLoad {
@@ -50,7 +58,7 @@
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (section == 0) return 4;
     if (section == 1) return 1;
-    if (section == 2) return 6;
+    if (section == 2) return 5;
     return 2;
 }
 
@@ -113,15 +121,12 @@ static NSString *DWWidgetSlotTextKey(NSInteger slot) {
             NSString *detail = text.length ? [NSString stringWithFormat:@"%@ • %@", DWWidgetTypeName(type), text] : DWWidgetTypeName(type);
             return [self cellForBasic:tableView title:[NSString stringWithFormat:@"Widget %ld", (long)slot] detail:detail accessory:UITableViewCellAccessoryDisclosureIndicator];
         }
-        if (ip.row == 4) {
-            return [self cellForBasic:tableView title:@"Áp dụng widget ngay" detail:@"Nạp lại cấu hình widget trên Lock Screen" accessory:UITableViewCellAccessoryDisclosureIndicator];
-        }
         UITableViewCell *c = [self cellForBasic:tableView title:@"Transparency" detail:@"0 = trong suốt, 100 = đậm" accessory:UITableViewCellAccessoryNone];
         c.accessoryView = self.transparencyField;
         return c;
     }
 
-    if (ip.row == 0) return [self cellForBasic:tableView title:@"DepthWallpaper" detail:@"v1.6.9 • Manual Depth + Widgets" accessory:UITableViewCellAccessoryNone];
+    if (ip.row == 0) return [self cellForBasic:tableView title:@"DepthWallpaper" detail:@"v1.6.10 • Manual Depth + Widgets" accessory:UITableViewCellAccessoryNone];
     return [self cellForBasic:tableView title:@"Cutout engine" detail:@"Giữ nguyên engine ổn định v1.5.6" accessory:UITableViewCellAccessoryNone];
 }
 
@@ -178,16 +183,6 @@ static NSString *DWWidgetSlotTextKey(NSInteger slot) {
         [self presentWidgetTypePickerForSlot:ip.row indexPath:ip];
         return;
     }
-
-    if (ip.section == 2 && ip.row == 4) {
-        [self widgetChanged];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), DWReloadNotification, NULL, NULL, YES);
-        });
-        [self alert:@"Đã áp dụng cấu hình widget."];
-        return;
-    }
 }
 
 - (void)presentWidgetTypePickerForSlot:(NSInteger)slot indexPath:(NSIndexPath *)ip {
@@ -221,12 +216,7 @@ static NSString *DWWidgetSlotTextKey(NSInteger slot) {
     }
 
     [meta writeToFile:DWMetadataPath atomically:YES];
-    CFNotificationCenterRef center = CFNotificationCenterGetDarwinNotifyCenter();
-    CFNotificationCenterPostNotification(center, DWReloadNotification, NULL, NULL, YES);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.10 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), DWReloadNotification, NULL, NULL, YES);
-    });
+    DWPostWidgetReload();
     [self.tableView reloadData];
 
     if (type != 0 && !providedText) {
@@ -248,7 +238,7 @@ static NSString *DWWidgetSlotTextKey(NSInteger slot) {
     self.transparencyField.text = [NSString stringWithFormat:@"%ld", (long)transparency];
     meta[DWMetaKeyWidgetTransparency] = @(transparency);
     [meta writeToFile:DWMetadataPath atomically:YES];
-    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), DWReloadNotification, NULL, NULL, YES);
+    DWPostWidgetReload();
 }
 
 - (void)textFieldDidEndEditing:(UITextField *)textField { [self widgetChanged]; }
