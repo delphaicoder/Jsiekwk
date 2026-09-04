@@ -2,19 +2,13 @@
 #ifndef DWShared_h
 #define DWShared_h
 
-// Thu muc dung chung (app ghi, tweak doc) — nam trong sandbox container cua app
-// se KHONG doc duoc tu SpringBoard (khac sandbox), nen phai dung 1 thu muc chung
-// ben ngoai sandbox ma ca 2 ben deu doc/ghi duoc.
 static NSString * const DWSharedDirectory = @"/var/mobile/Library/Application Support/DepthWallpaper";
 static NSString * const DWCutoutImagePath = @"/var/mobile/Library/Application Support/DepthWallpaper/cutout.png";
 static NSString * const DWMetadataPath    = @"/var/mobile/Library/Application Support/DepthWallpaper/meta.plist";
-
-// Darwin notification — app ban ra sau khi luu xong, bao tweak nap lai anh moi.
 static CFStringRef const DWReloadNotification = CFSTR("com.yourname.depthwallpaper/reload");
 
-// Key trong file meta.plist
-static NSString * const DWMetaKeyYOffsetRatio = @"YOffsetRatio"; // 0.0-1.0, ti le theo chieu cao man hinh
-static NSString * const DWMetaKeyScale        = @"Scale";         // ty le phong to/thu nho overlay
+static NSString * const DWMetaKeyYOffsetRatio = @"YOffsetRatio";
+static NSString * const DWMetaKeyScale        = @"Scale";
 static NSString * const DWMetaKeyEnabled      = @"Enabled";
 static NSString * const DWMetaKeyAspectMatch  = @"AspectMatch";
 static NSString * const DWMetaKeyManualFullResolution = @"ManualFullResolution";
@@ -28,12 +22,20 @@ static NSString * const DWMetaKeyWallpaperHeight = @"WallpaperHeight";
 static NSString * const DWMetaKeyCutoutWidth    = @"CutoutWidth";
 static NSString * const DWMetaKeyCutoutHeight   = @"CutoutHeight";
 
-// v1.6 widget settings. These keys are independent from the cutout renderer.
+// v1.6 widget settings. Independent from the cutout renderer.
 static NSString * const DWMetaKeyWidgetEnabled = @"WidgetEnabled";
-static NSString * const DWMetaKeyWidgetType = @"WidgetType"; // 0 battery, 1 manual weather, 2 custom text
-static NSString * const DWMetaKeyWidgetText = @"WidgetText";
+static NSString * const DWMetaKeyWidgetType = @"WidgetType"; // legacy slot-1 type
+static NSString * const DWMetaKeyWidgetText = @"WidgetText"; // legacy slot-1 text
 static NSString * const DWMetaKeyWidgetScale = @"WidgetScale";
 static NSString * const DWMetaKeyWidgetCenterX = @"WidgetCenterX";
 static NSString * const DWMetaKeyWidgetCenterY = @"WidgetCenterY";
+static NSString * const DWMetaKeyWidgetTransparency = @"WidgetTransparency"; // 0-100, default 86
+
+static NSString * const DWMetaKeyWidget1Type = @"Widget1Type";
+static NSString * const DWMetaKeyWidget2Type = @"Widget2Type";
+static NSString * const DWMetaKeyWidget3Type = @"Widget3Type";
+static NSString * const DWMetaKeyWidget1Text = @"Widget1Text";
+static NSString * const DWMetaKeyWidget2Text = @"Widget2Text";
+static NSString * const DWMetaKeyWidget3Text = @"Widget3Text";
 
 #endif

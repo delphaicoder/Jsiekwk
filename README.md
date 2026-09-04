@@ -101,3 +101,7 @@ See `FEATURES_v1.5.7.md` for the new preset system, options panel, logging expor
 - Experimental Lock Screen widget: Battery / manual Weather / Custom Text.
 - The stable v1.5.6 cutout engine in `Tweak.x` is intentionally left untouched.
 - Built with a mix of debugging, real-device testing, reverse engineering, and vibecoding.
+
+## v1.6.5 Widget additions
+
+The widget system now supports a single grouped widget container with three simultaneous slots. Each slot can be configured independently as Battery, Weather, or custom Text, and the Weather/Text slots can store their own content. The whole widget group has a numeric transparency setting from 0 to 100 percent. These changes are isolated from the existing cutout/depth engine.
